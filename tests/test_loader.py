@@ -88,3 +88,40 @@ def test_every_participant_verifies_parses_and_validates(pid):
     assert 55 < facts["acc_median_magnitude_raw"] < 75 and 0.85 < facts["acc_median_magnitude_g"] < 1.15
     assert facts["overlap_hours"] > 24
     assert rec["HR"].derived and rec["IBI"].derived and not rec["BVP"].derived
+
+
+def test_food_log_reader_handles_the_three_schemas(tmp_path):
+    from src.data.loader import FOOD_COLUMNS, read_food_log
+    std = tmp_path / "a.csv"; std.write_text("date,time,time_begin,time_end,logged_food,amount,unit,searched_food,calorie,total_carb,dietary_fiber,sugar,protein,total_fat\n"
+                                            "2020-02-13,18:00:00,2020-02-13 18:00:00,,Berry Smoothie,20.0,fluid ounce,Strawberry Smoothie,456.0,85.0,1.7,83.0,16.0,3.3\n")
+    tod = tmp_path / "b.csv"; tod.write_text(std.read_text().replace("date,time,", "date,time_of_day,"))
+    nohdr = tmp_path / "c.csv"; nohdr.write_text("2020-02-22,10:30:00,2020-02-22 10:30:00,Chicken Nuggets,8.0,piece,Chicken Nuggets,393.0,19.0,0.1,20.0\n")
+    a, b, c = read_food_log(std), read_food_log(tod), read_food_log(nohdr)
+    for df in (a, b, c):
+        assert list(df.columns) == list(FOOD_COLUMNS) and df["time_begin"].notna().all()
+    assert a.attrs["schema"] == "standard" and b.attrs["schema"] == "time_of_day" and c.attrs["schema"] == "headerless_11_columns"
+    assert float(a["total_carb"][0]) == 85.0 and float(b["total_carb"][0]) == 85.0
+    assert float(c["total_carb"][0]) == 19.0 and float(c["sugar"][0]) == 0.1 and float(c["protein"][0]) == 20.0
+    assert np.isnan(c["dietary_fiber"][0]) and np.isnan(c["total_fat"][0])
+
+
+def test_out_of_order_recordings_are_sorted_and_counted():
+    from src.data.loader import in_time_order
+    t0 = np.datetime64("2020-07-05T15:11:13", "ns")
+    block_a = t0 + np.timedelta64(19, "D") + (np.arange(100) * int(1e9 / 64)).astype("timedelta64[ns]")   # later block first
+    block_b = t0 + (np.arange(100) * int(1e9 / 64)).astype("timedelta64[ns]")
+    ts = np.concatenate([block_a, block_b, block_b[:3]])                                  # plus three exact duplicates
+    vals = np.arange(len(ts), dtype=float)
+    ts2, v2, back, dup = in_time_order(ts, vals)
+    assert back == 2 and dup == 3 and len(ts2) == 203, "two backward steps (the junction and the appended block); nothing dropped"
+    assert np.all(np.diff(ts2.astype(np.int64)) >= 0) and ts2[0] == block_b[0] and v2[0] == 100.0
+    ts3, _, back3, dup3 = in_time_order(block_b, np.zeros(100))
+    assert back3 == 0 and dup3 == 0 and np.array_equal(ts3, block_b)
+
+
+def test_minute_resolution_hr_stamps_are_expanded_to_seconds():
+    from src.data.loader import expand_minute_stamps
+    m = np.datetime64("2020-02-13T15:29", "ns")
+    ts = np.array([m] * 60 + [m + np.timedelta64(60, "s")] * 60)
+    out = expand_minute_stamps(ts, 1.0)
+    assert len(np.unique(out)) == 120 and out[0] == m and out[59] == m + np.timedelta64(59, "s") and out[60] == m + np.timedelta64(60, "s")

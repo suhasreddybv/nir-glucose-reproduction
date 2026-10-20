@@ -85,10 +85,39 @@ def verify(rel: str, expected: dict[str, str] | None = None) -> Path:
 @dataclass(frozen=True)
 class Channel:
     name: str
-    ts: np.ndarray            # datetime64[ns]
+    ts: np.ndarray            # datetime64[ns], strictly increasing after `in_time_order`
     values: np.ndarray        # [n] or [n, 3] for ACC
     derived: bool = False
     measured_hz: float = float("nan")
+    reordered_steps: int = 0  # backward steps found in the file and sorted away (015: one per channel)
+    duplicate_stamps: int = 0 # exact duplicate timestamps in the file (kept, counted)
+    minute_stamps: bool = False  # timestamps carried no seconds and were expanded (001's HR)
+
+
+def in_time_order(ts: np.ndarray, values: np.ndarray) -> tuple[np.ndarray, np.ndarray, int, int]:
+    """Sort a channel into time order (stable) and report how many backward steps and exact
+    duplicate timestamps the file had. Nothing is dropped: duplicates are kept in file order.
+    Participant 015's E4 files are two recordings concatenated out of order (D-005)."""
+    t = ts.astype("datetime64[ns]").astype(np.int64)
+    back = int((np.diff(t) < 0).sum())
+    order = np.argsort(t, kind="stable")
+    ts, t = ts[order], t[order]
+    return ts, values[order], back, int((np.diff(t) == 0).sum())
+
+
+def expand_minute_stamps(ts: np.ndarray, hz: float = 1.0) -> np.ndarray:
+    """Participant 001's HR file carries timestamps to the minute only, 60 samples per
+    stamp. Assign each sample within a minute its own second by file order (1 Hz)."""
+    t = ts.astype("datetime64[ns]").astype(np.int64)
+    out = t.copy()
+    i = 0
+    while i < len(t):
+        j = i
+        while j + 1 < len(t) and t[j + 1] == t[i]:
+            j += 1
+        out[i:j + 1] = t[i] + (np.arange(j + 1 - i) * int(1e9 / hz))
+        i = j + 1
+    return out.astype("datetime64[ns]")
 
 
 @dataclass(frozen=True)
@@ -122,17 +151,49 @@ def read_dexcom(path: Path) -> tuple[np.ndarray, np.ndarray]:
 def read_e4(path: Path, name: str) -> tuple[np.ndarray, np.ndarray]:
     df = pd.read_csv(path)
     df.columns = [c.strip() for c in df.columns]
-    ts = pd.to_datetime(df["datetime"], format="mixed").to_numpy("datetime64[ns]")
+    raw = df["datetime"].astype(str)
+    ts = pd.to_datetime(raw, format="mixed").to_numpy("datetime64[ns]")
+    minute_only = bool(raw.str.count(":").max() == 1)          # "2/13/20 15:29": no seconds field
+    if minute_only:
+        ts = expand_minute_stamps(ts, NOMINAL_HZ.get(name, 1.0))
     if name == "ACC":
         vals = df[["acc_x", "acc_y", "acc_z"]].to_numpy(float)
     else:
         vals = df[df.columns[1]].to_numpy(float)
+    read_e4.last_minute_only = minute_only
     return ts, vals
 
 
+FOOD_COLUMNS = ("date", "time", "time_begin", "time_end", "logged_food", "amount", "unit", "searched_food",
+                "calorie", "total_carb", "dietary_fiber", "sugar", "protein", "total_fat")
+# Participant 003's file has no header and 11 columns. The order is not stated anywhere; it was
+# inferred from the values (chicken nuggets 393 kcal, 19 g carbohydrate, 0.1, 20; gumdrops 130, 33,
+# 21, 0): the two trailing columns read as sugar and protein, not fibre and protein. Recorded in the
+# decision log as a structural deviation; the file is read with this mapping and flagged.
+FOOD_COLUMNS_003 = ("date", "time", "time_begin", "logged_food", "amount", "unit", "searched_food",
+                    "calorie", "total_carb", "sugar", "protein")
+
+
 def read_food_log(path: Path) -> pd.DataFrame:
-    df = pd.read_csv(path)
-    df["time_begin"] = pd.to_datetime(df["time_begin"])
+    """Three schemas exist across the sixteen files (D-005): the standard header; the same
+    with `time_of_day` for `time` (007, 013, 015, 016); and 003's headerless 11-column file.
+    All are returned on the standard columns, missing ones as NaN, with `schema` recorded."""
+    first = path.read_text(encoding="utf-8-sig").splitlines()[0]
+    if first.startswith("date"):
+        df = pd.read_csv(path, encoding="utf-8-sig")
+        df.columns = [c.strip() for c in df.columns]
+        schema = "standard"
+        if "time_of_day" in df.columns:
+            df = df.rename(columns={"time_of_day": "time"}); schema = "time_of_day"
+    else:
+        df = pd.read_csv(path, header=None, names=list(FOOD_COLUMNS_003), encoding="utf-8-sig")
+        schema = "headerless_11_columns"
+    for c in FOOD_COLUMNS:
+        if c not in df.columns:
+            df[c] = np.nan
+    df = df[list(FOOD_COLUMNS)].copy()
+    df["time_begin"] = pd.to_datetime(df["time_begin"], errors="coerce")
+    df.attrs["schema"] = schema
     return df
 
 
@@ -224,12 +285,18 @@ def load_participant(pid: str, use_cache: bool = True) -> tuple[SubjectRecord, d
                 else:
                     cols["v0"] = vals
                 pd.DataFrame(cols).to_parquet(pq, index=False)
+        minute = bool(getattr(read_e4, "last_minute_only", False)) if name != "Dexcom" and not (use_cache and pq.exists()) else False
+        ts, vals, back, dup = in_time_order(ts, vals)
         if name == "ACC":
             vals = vals / ACC_UNITS_PER_G          # to g, after the raw-magnitude assertion below
-        channels[name] = Channel(name, ts, vals, derived=name in DERIVED, measured_hz=measured_hz(ts))
+        channels[name] = Channel(name, ts, vals, derived=name in DERIVED, measured_hz=measured_hz(ts),
+                                 reordered_steps=back, duplicate_stamps=dup, minute_stamps=minute)
     # validation runs on the raw ACC magnitude: undo the scaling for that one check
     raw_acc = Channel("ACC", channels["ACC"].ts, channels["ACC"].values * ACC_UNITS_PER_G, measured_hz=channels["ACC"].measured_hz)
     facts = validate(pid, {**channels, "ACC": raw_acc})
     facts["acc_median_magnitude_g"] = float(np.median(np.linalg.norm(channels["ACC"].values, axis=1)))
+    facts["reordered_steps"] = {k: c.reordered_steps for k, c in channels.items() if c.reordered_steps}
+    facts["duplicate_stamps"] = {k: c.duplicate_stamps for k, c in channels.items() if c.duplicate_stamps}
+    facts["minute_stamps"] = [k for k, c in channels.items() if c.minute_stamps]
     rec = SubjectRecord(pid, str(row["Gender"].iloc[0]), float(row["HbA1c"].iloc[0]), channels, food, shas)
     return rec, facts

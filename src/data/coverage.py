@@ -63,7 +63,8 @@ def main() -> None:
                          readings_with_complete_e4_window=complete, share_with_complete_window=round(complete / len(cgm.values), 3),
                          acc_median_magnitude_raw=round(facts["acc_median_magnitude_raw"], 2), acc_median_magnitude_g=round(facts["acc_median_magnitude_g"], 3),
                          bvp_resting_mean=round(facts["bvp_resting_hour_mean"], 3), bvp_resting_sd=round(facts["bvp_resting_hour_sd"], 2),
-                         bvp_hz=round(facts["BVP_hz"], 2), acc_hz=round(facts["ACC_hz"], 2), eda_hz=round(facts["EDA_hz"], 2), temp_hz=round(facts["TEMP_hz"], 2)))
+                         bvp_hz=round(facts["BVP_hz"], 2), acc_hz=round(facts["ACC_hz"], 2), eda_hz=round(facts["EDA_hz"], 2), temp_hz=round(facts["TEMP_hz"], 2),
+                         reordered_steps=";".join(f"{k}:{v}" for k, v in facts["reordered_steps"].items()), food_log_schema=rec.food_log.attrs.get("schema", "")))
         v = cgm.values
         glu.append(dict(participant=pid, hba1c=rec.hba1c, n=len(v), mean=round(float(v.mean()), 1), sd=round(float(v.std()), 1),
                         min=float(v.min()), max=float(v.max()), p5=round(float(np.percentile(v, 5)), 1), p95=round(float(np.percentile(v, 95)), 1),
