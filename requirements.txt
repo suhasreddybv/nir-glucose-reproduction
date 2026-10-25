@@ -5,3 +5,4 @@ pyarrow>=17
 matplotlib>=3.9
 scikit-learn>=1.5
 pytest>=8
+xgboost>=2.0
