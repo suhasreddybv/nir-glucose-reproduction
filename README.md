@@ -2,7 +2,7 @@
 
 A reproduction of Bent, Cho, Henriquez et al. (2021), *Engineering digital biomarkers of interstitial glucose from noninvasive smartwatches* (npj Digital Medicine 4:89), on the dataset they released: what replicates under the paper's own evaluation, what survives a time-blocked split, and the baselines the paper did not report.
 
-**Result.** _Pending the models (Tuesday and Wednesday); the baselines are in. Under the paper's own personalised regime, **a constant — each participant's mean glucose over their first half — scores RMSE 20.99 ± 4.17 mg/dL and "accuracy" 86.97 %, against the paper's personalised XGBoost at 21.10 ± 4.50 and 86.74 %**; under leave-one-person-out, a linear model on HbA1c and sex alone scores 21.47 ± 3.94 against the paper's 21.22 ± 4.14. Three of five pre-registered predictions are judged and held (P1a, P2a, P4; D-012). The protocol ([docs/protocol.md](docs/protocol.md)) was frozen at `7860469db2e059bd` and verified against the paper before any of this ran._
+**Result.** _Regression judged; classification (Wednesday) pending. **The paper's regression numbers reproduce — 21.29 against 21.22 mg/dL under leave-one-person-out — and they are the numbers a constant achieves on this cohort.** A linear model on HbA1c and sex alone scores 21.47 across participants and the per-participant first-half mean scores 20.99 within; the 69-feature XGBoost beats the first by 0.19 mg/dL [−0.63, +1.12] and loses to the second by 1.36 [−3.34, +0.46]. Every ablation is worse than the baselines; the wrist features alone are the worst of all. The feature-importance ranking reproduces (14 of the paper's top 15). Five of the six pre-registered verdicts are in (P1a/b, P2a/b, P4 held; P5 measured both ways); P3 waits for the classification. Protocol frozen at `7860469db2e059bd` and verified before any fit._
 
 ## What is fixed before anything is fitted
 
@@ -82,19 +82,87 @@ Protocol §8, run before any model exists (D-012). The paper says both of its XG
 | 015 | 249 | 17.98 | 10.40 % | 89.60 % | 15.74 | 18.38 (248) | 18.00 |
 | 016 | 915 | 17.71 | 11.20 % | 88.80 % | 21.99 | 20.57 (876) | 17.83 |
 
-**Three of the five pre-registered predictions are judged** (protocol §11, `results/predictions.csv`); P1b, P2b, P3 and P5 wait for the models.
+**P1a, P2a and P4 were judged here before any model existed**; the full verdict table, with P1b, P2b, P3 and P5, is in the model section below.
+
+**The labels** (`results/labels.csv`, `results/label_distribution.csv`, `results/balanced_set.csv`, D-011). PersHigh / PersLow / PersNorm from the trailing 24-h mean ± 1 SD of each participant's own CGM (protocol cell 7 d) label 36,722 of 36,898 readings: PersLow 5,206 (14.2%), PersNorm 25,854 (70.4%), PersHigh 5,662 (15.4%). The three class distributions land on the paper's Table 1: PersNorm 111.8 ± 14.6 mg/dL (paper 112.4 ± 14.5), PersHigh 148.5 ± 25.7 (149.9 ± 24.4), PersLow 91.0 ± 11.6 (90.8 ± 11.1). Undersampling every class to the smallest on the 25,644 complete labelled epochs gives a balanced set of **N = 10,230** (3 × 3,410) against the paper's 8,666; the difference is the size of the complete set, not the rule.
+
+## The paper's model, reproduced and set against the baselines
+
+Protocol cell 4 and §9, run after the baselines (D-014): XGBoost with max depth 6, 100 estimators and learning rate 0.1, after a 1,000-tree random-forest selection at the 0.005 importance cut-off inside each training fold, under the paper's two regimes and the time-blocked one, with five ablations. Every model is scored on exactly the rows the baselines were, and the last two columns are the paired per-participant RMSE difference against the baseline the regime makes available (B2 across participants, B1 within), with the 16-participant bootstrap. Generated from `results/models_summary.csv` and `results/paired_deltas.csv`.
+
+| Regime | Model | Participants | Rows | RMSE mean ± SD [95 % CI] | MAPE | "Accuracy" | Features kept (mean) | Baseline − model RMSE, mean [95 % CI] | Participants where the model is better | Paper |
+|---|---|---|---|---|---|---|---|---|---|---|
+| LOPO (paper's population regime) | full model, 69 features | 16 | 28,964 | **21.29** ± 4.00 [19.33, 23.16] | 14.34 % | 85.66 % | 45.1 | B2: +0.19 [-0.63, +1.12] | 6 / 16 | 21.22 ± 4.14 |
+| LOPO (paper's population regime) | minus the food log (50) | 16 | 28,964 | **22.50** ± 3.99 [20.52, 24.48] | 15.06 % | 84.94 % | 47.7 | B2: -1.03 [-1.75, -0.32] | 3 / 16 |  |
+| LOPO (paper's population regime) | minus sex, HbA1c, ID (66) | 16 | 28,964 | **21.39** ± 3.80 [19.58, 23.20] | 14.41 % | 85.59 % | 43.8 | B2: +0.08 [-1.01, +1.27] | 7 / 16 |  |
+| LOPO (paper's population regime) | minus all E4 features (24) | 16 | 28,964 | **22.93** ± 3.69 [21.16, 24.68] | 15.65 % | 84.35 % | 21.9 | B2: -1.45 [-2.66, -0.20] | 6 / 16 |  |
+| LOPO (paper's population regime) | E4 features + clock only (47) | 16 | 28,964 | **23.22** ± 3.39 [21.58, 24.88] | 15.72 % | 84.28 % | 45.0 | B2: -1.75 [-2.59, -0.78] | 3 / 16 |  |
+| LOPO (paper's population regime) | food log + clock only (21) | 16 | 28,964 | **22.50** ± 4.14 [20.52, 24.52] | 15.37 % | 84.63 % | 19.0 | B2: -1.02 [-2.31, +0.26] | 6 / 16 |  |
+| first half → second half (paper's personalised regime) | full model, 69 features | 16 | 14,486 | **22.35** ± 3.86 [20.44, 24.17] | 13.68 % | 86.33 % | 33.9 | B1: -1.36 [-3.34, +0.46] | 9 / 16 | 21.10 ± 4.50 |
+| first half → second half (paper's personalised regime) | minus the food log (50) | 16 | 14,486 | **22.72** ± 4.34 [20.64, 24.79] | 14.25 % | 85.75 % | 32.5 | B1: -1.73 [-3.46, -0.13] | 5 / 16 |  |
+| first half → second half (paper's personalised regime) | minus sex, HbA1c, ID (66) | 16 | 14,486 | **22.27** ± 3.84 [20.40, 24.07] | 13.59 % | 86.41 % | 33.9 | B1: -1.28 [-3.25, +0.52] | 9 / 16 |  |
+| first half → second half (paper's personalised regime) | minus all E4 features (24) | 16 | 14,486 | **22.52** ± 2.82 [21.20, 23.88] | 14.18 % | 85.82 % | 16.1 | B1: -1.53 [-3.15, -0.02] | 6 / 16 |  |
+| first half → second half (paper's personalised regime) | E4 features + clock only (47) | 16 | 14,486 | **22.65** ± 4.15 [20.64, 24.63] | 14.18 % | 85.82 % | 32.5 | B1: -1.66 [-3.42, -0.08] | 5 / 16 |  |
+| first half → second half (paper's personalised regime) | food log + clock only (21) | 16 | 14,486 | **22.48** ± 2.80 [21.17, 23.85] | 14.15 % | 85.84 % | 16.1 | B1: -1.50 [-3.13, +0.01] | 6 / 16 |  |
+| time-blocked, 24-h exclusion zones | full model, 69 features | 15 | 4,826 | **22.53** ± 7.21 [19.22, 26.34] | 13.91 % | 86.09 % | 35.6 | B1: -1.38 [-3.50, +0.71] | 6 / 15 | — |
+| time-blocked, 24-h exclusion zones | minus the food log (50) | 15 | 4,826 | **22.85** ± 5.89 [20.00, 25.98] | 14.71 % | 85.30 % | 32.3 | B1: -1.71 [-3.67, +0.24] | 4 / 15 |  |
+| time-blocked, 24-h exclusion zones | minus sex, HbA1c, ID (66) | 15 | 4,826 | **22.43** ± 7.12 [19.18, 26.15] | 13.89 % | 86.11 % | 35.3 | B1: -1.28 [-3.42, +0.80] | 6 / 15 |  |
+| time-blocked, 24-h exclusion zones | minus all E4 features (24) | 15 | 4,826 | **22.67** ± 7.40 [19.36, 26.91] | 14.06 % | 85.94 % | 17.5 | B1: -1.52 [-2.65, -0.38] | 4 / 15 |  |
+| time-blocked, 24-h exclusion zones | E4 features + clock only (47) | 15 | 4,826 | **22.87** ± 5.87 [20.01, 26.05] | 14.77 % | 85.23 % | 32.2 | B1: -1.72 [-3.68, +0.22] | 4 / 15 |  |
+| time-blocked, 24-h exclusion zones | food log + clock only (21) | 15 | 4,826 | **22.63** ± 7.45 [19.29, 26.86] | 14.05 % | 85.95 % | 17.5 | B1: -1.48 [-2.62, -0.35] | 4 / 15 |  |
+
+**Read it this way.** Under leave-one-person-out the full model lands on the paper: **21.29 ± 4.00 against the paper's 21.22 ± 4.14**, with 45 of 69 features kept on average. Its paired advantage over the two-number HbA1c-and-sex model is **+0.19 mg/dL [−0.63, +1.12]**, better in 6 of 16 participants: the 67 other features, 45 of them from the wrist, add nothing to a constant per participant that the bootstrap can see. Under the paper's personalised regime the full model scores **22.35 against the paper's 21.10** and is **worse than its own participant's first-half mean by 1.36 mg/dL [−3.34, +0.46]**; under the time-blocked regime, worse by 1.38 [−3.50, +0.71]. Every ablation is worse than the baseline under every regime; the model with E4 features and the clock alone is the worst of all under LOPO (23.22, −1.75 [−2.59, −0.78] against B2). Removing the food log costs 1.22 mg/dL under LOPO and removing the wrist costs 1.64; within participant the two costs are 0.37 and 0.17 — the P5 measurement goes one way across participants and the other within, and both are small beside the 4-mg/dL spread between participants.
+
+| Participant | LOPO n | B2 RMSE | XGBoost RMSE | Δ | Second-half n | B1 RMSE | personalised XGBoost RMSE | Δ | Time-blocked n | B1 RMSE | XGBoost RMSE | Δ |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 001 | 2,062 | 16.42 | 16.71 | -0.29 | 1,031 | 19.01 | 19.71 | -0.70 | 383 | 15.03 | 15.37 | -0.34 |
+| 002 | 1,882 | 23.62 | 24.26 | -0.64 | 941 | 19.55 | 19.02 | +0.53 | 286 | 23.74 | 22.44 | +1.30 |
+| 003 | 1,398 | 18.36 | 18.86 | -0.49 | 699 | 15.67 | 23.07 | -7.40 | 279 | 15.40 | 18.11 | -2.71 |
+| 004 | 1,364 | 19.46 | 18.16 | +1.30 | 682 | 20.24 | 21.82 | -1.58 | 129 | 9.54 | 14.22 | -4.68 |
+| 005 | 2,394 | 15.90 | 14.10 | +1.80 | 1,197 | 15.54 | 15.01 | +0.53 | 462 | 17.22 | 14.83 | +2.39 |
+| 006 | 1,643 | 28.78 | 23.39 | +5.38 | 822 | 25.87 | 24.70 | +1.17 | 216 | 13.45 | 18.90 | -5.46 |
+| 007 | 2,071 | 22.44 | 24.40 | -1.96 | 1,036 | 22.04 | 22.11 | -0.07 | 401 | 26.43 | 24.26 | +2.17 |
+| 008 | 2,150 | 19.00 | 17.23 | +1.77 | 1,075 | 19.47 | 17.79 | +1.68 | 449 | 19.34 | 13.91 | +5.43 |
+| 009 | 2,095 | 24.21 | 26.60 | -2.39 | 1,048 | 25.49 | 24.71 | +0.78 | 345 | 25.86 | 25.66 | +0.20 |
+| 010 | 2,031 | 28.36 | 29.04 | -0.68 | 1,016 | 31.45 | 31.39 | +0.07 | 347 | 41.16 | 43.34 | -2.18 |
+| 011 | 2,170 | 25.34 | 24.03 | +1.31 | 1,085 | 23.01 | 20.95 | +2.06 | 411 | 28.13 | 24.19 | +3.94 |
+| 012 | 1,937 | 19.09 | 19.50 | -0.41 | 969 | 16.24 | 25.18 | -8.94 | 293 | 16.16 | 25.90 | -9.74 |
+| 013 | 1,882 | 23.52 | 22.57 | +0.95 | 941 | 23.52 | 21.81 | +1.71 | 284 | 23.57 | 24.04 | -0.47 |
+| 014 | 1,559 | 21.34 | 23.00 | -1.67 | 780 | 23.03 | 20.61 | +2.42 | 275 | 23.38 | 25.77 | -2.39 |
+| 015 | 497 | 15.74 | 16.39 | -0.66 | 249 | 17.98 | 28.46 | -10.48 | — | — | — | — |
+| 016 | 1,829 | 21.99 | 22.31 | -0.32 | 915 | 17.71 | 21.26 | -3.55 | 266 | 18.81 | 26.96 | -8.16 |
+
+**Feature importance reproduces** (`results/selected_features.csv`): 14 of the paper's 15 most important features (Table 3) are in this reproduction's top 15 by the same random-forest importance averaged over the LOPO folds, with minutes from midnight first in both. The ranking is the paper's; it just does not translate into error below a constant.
+
+| Rank | Feature (this reproduction) | RF importance mean ± SD over 16 LOPO folds | Selected in folds | Paper's Table 3 at this rank |
+|---|---|---|---|---|
+| 1 | Minfrommid | 0.067 ± 0.005 | 16 / 16 | Minutes from midnight |
+| 2 | Biological Sex | 0.063 ± 0.032 | 16 / 16 | Sugar intake (previous 24 h) |
+| 3 | HbA1c | 0.062 ± 0.021 | 16 / 16 | Hemoglobin A1c (HbA1c) |
+| 4 | carbs2hr | 0.052 ± 0.019 | 16 / 16 | Carbohydrates (previous 2 h) |
+| 5 | Activity24 | 0.041 ± 0.004 | 16 / 16 | Biological sex |
+| 6 | sugar2hr | 0.041 ± 0.021 | 16 / 16 | Activity (previous 24 h) |
+| 7 | sugar24hr | 0.038 ± 0.031 | 16 / 16 | Sugar intake (previous 2 h) |
+| 8 | ID | 0.038 ± 0.015 | 16 / 16 | Sugar intake (previous 8 h) |
+| 9 | sugar8hr | 0.035 ± 0.006 | 16 / 16 | Accelerometry (mean previous 2 h) |
+| 10 | Eatmean24hr | 0.032 ± 0.004 | 16 / 16 | Wake time |
+| 11 | PeakEDA2hr_mean | 0.031 ± 0.010 | 16 / 16 | ID |
+| 12 | ACC_mean_2hrs | 0.027 ± 0.003 | 16 / 16 | Accelerometry (max previous 2 h) |
+| 13 | ACC_max_2hrs | 0.027 ± 0.003 | 16 / 16 | Protein (previous 24 h) |
+| 14 | WakeTime | 0.027 ± 0.005 | 16 / 16 | Peak electrodermal activity (mean previous 2 h) |
+| 15 | protein24hr | 0.023 ± 0.003 | 16 / 16 | Carbohydrates (previous 24 h) |
+
+**All five predictions are judged** (`results/predictions.csv`):
 
 | Prediction | Statement | Value | Reference | Verdict |
 |---|---|---|---|---|
 | P1a | B1 under the personalised regime lands within 3 mg/dL of the paper's 21.10 | 20.99 | 21.1 | **held** |
-| P1b | the personalised XGBoost beats B1 by less than 3 mg/dL | — | 20.99 | **pending** |
+| P1b | the personalised XGBoost beats B1 by less than 3 mg/dL | model 22.35; B1 - model -1.36 [-3.342, 0.464] | 20.99 | **held** |
 | P2a | B0 or B2 under LOPO lands within 3 mg/dL of the paper's 21.22 | B0 22.467; B2 21.473 | 21.22 | **held** |
-| P2b | the population XGBoost beats B2 by less than 3 | — | 21.473 | **pending** |
+| P2b | the population XGBoost beats B2 by less than 3 | model 21.285; B2 - model 0.188 [-0.633, 1.117] | 21.473 | **held** |
 | P3 | classification reproduces within 3 points under R1 (84.3%) and falls by more than 15 points under R2 and R3 | — | 84.3 | **pending** |
 | P4 | B1's accuracy (100 - MAPE) is above 84%, from a constant | 86.966 | 84.0 | **held** |
-| P5 | measurement: removing the food log costs more RMSE than removing all E4 features | — | — | **pending** |
-
-**The labels** (`results/labels.csv`, `results/label_distribution.csv`, `results/balanced_set.csv`, D-011). PersHigh / PersLow / PersNorm from the trailing 24-h mean ± 1 SD of each participant's own CGM (protocol cell 7 d) label 36,722 of 36,898 readings: PersLow 5,206 (14.2%), PersNorm 25,854 (70.4%), PersHigh 5,662 (15.4%). The three class distributions land on the paper's Table 1: PersNorm 111.8 ± 14.6 mg/dL (paper 112.4 ± 14.5), PersHigh 148.5 ± 25.7 (149.9 ± 24.4), PersLow 91.0 ± 11.6 (90.8 ± 11.1). Undersampling every class to the smallest on the 25,644 complete labelled epochs gives a balanced set of **N = 10,230** (3 × 3,410) against the paper's 8,666; the difference is the size of the complete set, not the rule.
+| P5 | measurement: removing the food log costs more RMSE than removing all E4 features | LOPO: minus food +1.215, minus E4 +1.642; halves: minus food +0.368, minus E4 +0.171 | — | **E4 costs more (LOPO); food costs more (halves)** |
 
 ## Reproduce
 
@@ -102,11 +170,12 @@ Protocol §8, run before any model exists (D-012). The paper says both of its XG
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 pre-commit install && pre-commit install --hook-type pre-push
-pytest                              # 150 tests; 17 need the dataset and skip without it
+pytest                              # 159 tests; 17 need the dataset and skip without it
 python -m src.data.coverage         # results/coverage.csv, glucose_distribution.csv
 python -m src.features.build        # the 69 features per epoch (cached outside the tree); results/epochs.csv, feature_missingness.csv
 python -m src.eval.label_counts     # results/labels.csv, label_distribution.csv, balanced_set.csv
 python -m src.eval.baselines        # results/baselines_*.csv, predictions.csv (P1a, P2a, P4 judged)
+python -m src.eval.models_run       # results/models_*.csv, paired_deltas*.csv, selected_features.csv (P1b, P2b, P5 judged; ~2 h)
 ```
 
 Data: see [data/README.md](data/README.md). No data is included in this repository.

@@ -47,7 +47,7 @@ def test_verdicts_follow_from_the_numbers():
     assert pred[("P2", "a")]["verdict"] == ("held" if min(abs(b0 - 21.22), abs(b2 - 21.22)) <= 3 else "failed")
     acc = float(summ[("R1_halves", "B1_participant_mean")]["accuracy_mean"])
     assert pred[("P4", "")]["verdict"] == ("held" if acc > 84 else "failed")
-    assert all(pred[k]["verdict"] == "pending" for k in (("P1", "b"), ("P2", "b"), ("P3", ""), ("P5", "")))
+    assert pred[("P3", "")]["verdict"] == "pending"          # P1b, P2b, P5 are judged by the models (tests/test_results_models.py)
 
 
 def test_b3_is_compared_with_b1_on_identical_rows():

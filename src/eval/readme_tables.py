@@ -55,3 +55,56 @@ def verdict_table() -> str:
 
 if __name__ == "__main__":
     print(baseline_summary_table()); print(); print(baseline_participant_table()); print(); print(verdict_table())
+
+
+# ------------------------------------------------------------------ the models (Tuesday)
+
+REGIME_LABEL = {"R1_lopo": "LOPO (paper's population regime)", "R1_halves": "first half → second half (paper's personalised regime)",
+                "R3_blocked": "time-blocked, 24-h exclusion zones"}
+CONFIG_LABEL = {"full_69": "full model, 69 features", "minus_food": "minus the food log (50)", "minus_user_model": "minus sex, HbA1c, ID (66)",
+                "minus_e4": "minus all E4 features (24)", "e4_only": "E4 features + clock only (47)", "food_only": "food log + clock only (21)"}
+
+
+def model_summary_table() -> str:
+    s = {(r["regime"], r["config"]): r for r in _rows("models_summary.csv")}
+    d = {(r["regime"], r["config"]): r for r in _rows("paired_deltas.csv")}
+    paper = {"R1_lopo": "21.22 ± 4.14", "R1_halves": "21.10 ± 4.50", "R3_blocked": "—"}
+    out = ["| Regime | Model | Participants | Rows | RMSE mean ± SD [95 % CI] | MAPE | \"Accuracy\" | Features kept (mean) | Baseline − model RMSE, mean [95 % CI] | Participants where the model is better | Paper |",
+           "|---|---|---|---|---|---|---|---|---|---|---|"]
+    for reg in ("R1_lopo", "R1_halves", "R3_blocked"):
+        for cfg in ("full_69", "minus_food", "minus_user_model", "minus_e4", "e4_only", "food_only"):
+            r, q = s.get((reg, cfg)), d.get((reg, cfg))
+            if r is None:
+                continue
+            base = "B2" if reg == "R1_lopo" else "B1"
+            out.append(f"| {REGIME_LABEL[reg]} | {CONFIG_LABEL[cfg]} | {r['n_participants']} | {int(r['n_rows']):,} | **{float(r['rmse_mean']):.2f}** ± {float(r['rmse_sd']):.2f} "
+                       f"[{float(r['rmse_ci_lo']):.2f}, {float(r['rmse_ci_hi']):.2f}] | {float(r['mape_mean']):.2f} % | {float(r['accuracy_mean']):.2f} % | {float(r['n_features_mean']):.1f} | "
+                       f"{base}: {float(q['delta_rmse_mean']):+.2f} [{float(q['delta_rmse_ci_lo']):+.2f}, {float(q['delta_rmse_ci_hi']):+.2f}] | {q['participants_model_better']} / {q['n_participants']} | "
+                       f"{paper[reg] if cfg == 'full_69' else ''} |")
+    return "\n".join(out)
+
+
+def model_participant_table() -> str:
+    d = {(r["regime"], r["config"], r["participant"]): r for r in _rows("paired_deltas_per_participant.csv")}
+    out = ["| Participant | LOPO n | B2 RMSE | XGBoost RMSE | Δ | Second-half n | B1 RMSE | personalised XGBoost RMSE | Δ | Time-blocked n | B1 RMSE | XGBoost RMSE | Δ |",
+           "|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
+    pids = sorted({k[2] for k in d})
+    for pid in pids:
+        cells = [pid]
+        for reg in ("R1_lopo", "R1_halves", "R3_blocked"):
+            r = d.get((reg, "full_69", pid))
+            cells += ([f"{int(r['n']):,}", f"{float(r['baseline_rmse']):.2f}", f"{float(r['model_rmse']):.2f}", f"{float(r['delta_rmse']):+.2f}"] if r else ["—"] * 4)
+        out.append("| " + " | ".join(cells) + " |")
+    return "\n".join(out)
+
+
+def top_features_table(n: int = 15) -> str:
+    rows = [r for r in _rows("selected_features.csv") if r["regime"] == "R1_lopo" and r["config"] == "full_69"]
+    rows.sort(key=lambda r: -float(r["importance_mean"]))
+    paper = ["Minutes from midnight", "Sugar intake (previous 24 h)", "Hemoglobin A1c (HbA1c)", "Carbohydrates (previous 2 h)", "Biological sex", "Activity (previous 24 h)",
+             "Sugar intake (previous 2 h)", "Sugar intake (previous 8 h)", "Accelerometry (mean previous 2 h)", "Wake time", "ID", "Accelerometry (max previous 2 h)",
+             "Protein (previous 24 h)", "Peak electrodermal activity (mean previous 2 h)", "Carbohydrates (previous 24 h)"]
+    out = ["| Rank | Feature (this reproduction) | RF importance mean ± SD over 16 LOPO folds | Selected in folds | Paper's Table 3 at this rank |", "|---|---|---|---|---|"]
+    for i, r in enumerate(rows[:n]):
+        out.append(f"| {i + 1} | {r['feature']} | {float(r['importance_mean']):.3f} ± {float(r['importance_sd']):.3f} | {r['times_selected']} / {r['folds']} | {paper[i]} |")
+    return "\n".join(out)

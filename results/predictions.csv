@@ -1,8 +1,8 @@
 prediction,part,statement,value,reference,criterion,verdict,judged,source
 P1,a,B1 under the personalised regime lands within 3 mg/dL of the paper's 21.10,20.99,21.1,|value - 21.10| <= 3,held,2026-10-25,results/baselines_summary.csv
-P1,b,the personalised XGBoost beats B1 by less than 3 mg/dL,,20.99,B1 rmse - model rmse < 3,pending,,
+P1,b,the personalised XGBoost beats B1 by less than 3 mg/dL,"model 22.35; B1 - model -1.36 [-3.342, 0.464]",20.99,B1 rmse - model rmse < 3,held,2026-10-26,results/paired_deltas.csv
 P2,a,B0 or B2 under LOPO lands within 3 mg/dL of the paper's 21.22,B0 22.467; B2 21.473,21.22,either |value - 21.22| <= 3,held,2026-10-25,results/baselines_summary.csv
-P2,b,the population XGBoost beats B2 by less than 3,,21.473,B2 rmse - model rmse < 3,pending,,
+P2,b,the population XGBoost beats B2 by less than 3,"model 21.285; B2 - model 0.188 [-0.633, 1.117]",21.473,B2 rmse - model rmse < 3,held,2026-10-26,results/paired_deltas.csv
 P3,,classification reproduces within 3 points under R1 (84.3%) and falls by more than 15 points under R2 and R3,,84.3,|R1 - 84.3| <= 3 and R1 - R2 > 15 and R1 - R3 > 15,pending,,
 P4,,"B1's accuracy (100 - MAPE) is above 84%, from a constant",86.966,84.0,value > 84,held,2026-10-25,results/baselines_summary.csv
-P5,,measurement: removing the food log costs more RMSE than removing all E4 features,,,report which way it goes,pending,,
+P5,,measurement: removing the food log costs more RMSE than removing all E4 features,"LOPO: minus food +1.215, minus E4 +1.642; halves: minus food +0.368, minus E4 +0.171",,report which way it goes,E4 costs more (LOPO); food costs more (halves),2026-10-26,results/models_summary.csv
