@@ -97,7 +97,7 @@ Same format and rules as `wrist-ppg-motion-robust-hr` and `cgm-forecast-conforma
 - **Decision carried into Tuesday:** every model is evaluated on exactly the rows and regimes above; paired deltas are computed against B1 (within-participant regimes) and B2 (LOPO) on identical rows; XGBoost takes NaN natively so its n is the full usable test set, and the paired comparison with B3 is restricted to B3's rows.
 
 ### D-013 · The Tuesday reading block, done in Suhas's place: the feature table checks out, the HRV code matches up to its 0.1-ms rounding, and the companion paper settles the sex count
-- **Date / commit:** 2026-10-26 · `pending`
+- **Date / commit:** 2026-10-26 · `6da28f5`
 - **Status:** adopted
 - **Evidence:**
   - **Supplementary Table 1 against `docs/features.md`:** the 69 names parsed mechanically from the supplement's PDF text equal the 69 of `src/features/build.py::FEATURES` (the only difference is the space in "Biological Sex"); the grouping arithmetic that was wrong in the first draft (44 + 25) is corrected to 45 wrist + 19 food + 3 user/model + 2 clock = 69 and asserted at import.
@@ -106,7 +106,7 @@ Same format and rules as `wrist-ppg-motion-robust-hr` and `cgm-forecast-conforma
 - **The two underspecified choices left standing after the block** (D-008): the wake-time rule (the trailing-24-h mean in place of the calendar day's, and the rising-edge candidate) and the first-24-hour label handling (12-reading minimum). Neither can be checked against anything published; both are measured for their consequence instead — the labels reproduce Table 1 to within 1.4 mg/dL (D-011), and `WakeTime` is missing on 2.5 % of epochs (D-010).
 
 ### D-014 · The paper's XGBoost reproduces (21.29 vs 21.22 under LOPO) and does not beat a constant; P1b and P2b held, P5 measured both ways
-- **Date / commit:** 2026-10-26 · `pending`
+- **Date / commit:** 2026-10-26 · `6da28f5`
 - **Status:** adopted
 - **Decision (made before the run, `src/models.py`):** XGBoost max depth 6, 100 estimators, learning rate 0.1, `random_state = 0`; selection by a 1,000-tree random-forest regressor on the training rows with every feature present, keeping importance ≥ 0.005, inside each LOPO fold **and, by the same rule, on each participant's training rows for the personalised and time-blocked models** (the paper states the selection per LOPO fold and is silent for the personalised model; the alternative — no selection within participant — was not run, so as not to pick between the two after seeing numbers). XGBoost takes NaN natively, so the model's n is the full usable test set, identical to B0/B1/B2's rows; paired deltas are per participant on those rows. Five ablations with the two clock features kept in all: minus food (50), minus sex/HbA1c/ID (66), minus all E4 (24), E4 + clock (47), food + clock (21).
 - **Result** (`results/models_summary.csv`, `models_per_participant.csv`, `paired_deltas.csv`, `paired_deltas_per_participant.csv`, `selected_features.csv`; mean ± SD over participants, bootstrap 95 % CI over 16 in brackets; the run took 1 h 50 min, almost all of it the 96 LOPO forests):
