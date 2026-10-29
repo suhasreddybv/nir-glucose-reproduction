@@ -1,0 +1,16 @@
+regime,true,pred_PersLow,pred_PersNorm,pred_PersHigh
+R1_window_kfold,PersLow,8444,1356,430
+R1_window_kfold,PersNorm,1632,7047,1551
+R1_window_kfold,PersHigh,438,1291,8501
+R1_70_30_tree,PersLow,797,168,58
+R1_70_30_tree,PersNorm,198,624,201
+R1_70_30_tree,PersHigh,47,143,833
+R1_70_30_logistic,PersLow,644,184,195
+R1_70_30_logistic,PersNorm,327,477,219
+R1_70_30_logistic,PersHigh,188,256,579
+R2_participant_grouped,PersLow,3066,5037,2127
+R2_participant_grouped,PersNorm,2328,5790,2112
+R2_participant_grouped,PersHigh,2076,4665,3489
+R3_time_blocked,PersLow,208,254,90
+R3_time_blocked,PersNorm,118,343,120
+R3_time_blocked,PersHigh,76,256,267

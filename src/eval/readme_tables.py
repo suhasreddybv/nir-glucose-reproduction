@@ -108,3 +108,72 @@ def top_features_table(n: int = 15) -> str:
     for i, r in enumerate(rows[:n]):
         out.append(f"| {i + 1} | {r['feature']} | {float(r['importance_mean']):.3f} ± {float(r['importance_sd']):.3f} | {r['times_selected']} / {r['folds']} | {paper[i]} |")
     return "\n".join(out)
+
+
+# ------------------------------------------------------------------ classification (Wednesday) and the front page
+
+CLS_LABEL = {"R1_window_kfold": "Paper's split: random windows, repeated stratified 10-fold × 3", "R1_70_30_tree": "Paper's 70/30 random-window split, decision tree",
+             "R1_70_30_logistic": "Paper's 70/30 split, logistic regression", "R2_participant_grouped": "Participant-grouped 10-fold × 3",
+             "R3_time_blocked": "Time-blocked within participant, 24-h exclusion zones"}
+
+
+def classification_table() -> str:
+    out = ["| Regime | Folds | Test windows (all folds) | Balanced accuracy, mean ± SD [95 % CI] | Weighted F1 | R² | Paper |", "|---|---|---|---|---|---|---|"]
+    for r in _rows("classification_summary.csv"):
+        ci = f" [{float(r['balanced_accuracy_ci_lo']):.2f}, {float(r['balanced_accuracy_ci_hi']):.2f}]" if r["balanced_accuracy_ci_lo"] else ""
+        sd = f" ± {float(r['balanced_accuracy_sd']):.2f}" if int(r["folds"]) > 1 else ""
+        paper = {"R1_window_kfold": "84.3 ± 1.3; R² 0.505", "R1_70_30_tree": "82.0; R² 0.455", "R1_70_30_logistic": "52.0; R² 0"}.get(r["regime"], "—")
+        out.append(f"| {CLS_LABEL[r['regime']]} | {r['folds']} | {int(r['n_test_total']):,} | **{float(r['balanced_accuracy_mean']):.2f} %**{sd}{ci} | "
+                   f"{float(r['f1_weighted_mean']):.2f} % | {float(r['r2_mean']):.3f} | {paper} |")
+    return "\n".join(out)
+
+
+def classification_class_table() -> str:
+    out = ["| Regime | Recall PersLow | Recall PersNorm | Recall PersHigh | PPV PersLow at true prevalence | PPV PersNorm | PPV PersHigh |", "|---|---|---|---|---|---|---|"]
+    for r in _rows("classification_summary.csv"):
+        out.append(f"| {CLS_LABEL[r['regime']]} | {float(r['recall_PersLow']):.1f} % | {float(r['recall_PersNorm']):.1f} % | {float(r['recall_PersHigh']):.1f} % | "
+                   f"{float(r['ppv_adjusted_PersLow']):.1f} % | {float(r['ppv_adjusted_PersNorm']):.1f} % | {float(r['ppv_adjusted_PersHigh']):.1f} % |")
+    return "\n".join(out)
+
+
+def confusion_tables() -> str:
+    cm = _rows("classification_confusion.csv")
+    blocks = []
+    for reg in CLS_LABEL:
+        rows = [r for r in cm if r["regime"] == reg]
+        b = [f"**{CLS_LABEL[reg]}** (rows true, columns predicted, summed over folds)", "", "| | PersLow | PersNorm | PersHigh |", "|---|---|---|---|"]
+        b += [f"| {r['true']} | {int(r['pred_PersLow']):,} | {int(r['pred_PersNorm']):,} | {int(r['pred_PersHigh']):,} |" for r in rows]
+        blocks.append("\n".join(b))
+    return "\n\n".join(blocks)
+
+
+def front_page_table() -> str:
+    """The headline: the paper's number, this reproduction's, and the baseline it has to beat, per regime."""
+    m = {(r["regime"], r["config"]): r for r in _rows("models_summary.csv")}
+    b = {(r["regime"], r["baseline"]): r for r in _rows("baselines_summary.csv")}
+    d = {(r["regime"], r["config"]): r for r in _rows("paired_deltas.csv")}
+    c = {r["regime"]: r for r in _rows("classification_summary.csv")}
+    out = ["| Task and regime | Paper | This reproduction | The baseline it has to beat | Model − baseline (paired, 95 % CI) |", "|---|---|---|---|---|"]
+    for reg, label, paper, base_key, base_label in (
+            ("R1_lopo", "Glucose, RMSE mg/dL — leave one person out (paper's)", "21.22 ± 4.14", "B2_hba1c_sex_linear", "linear on HbA1c + sex"),
+            ("R1_halves", "Glucose, RMSE — first half → second half (paper's)", "21.10 ± 4.50", "B1_participant_mean", "the participant's first-half mean"),
+            ("R3_blocked", "Glucose, RMSE — time-blocked, 24-h zones", "—", "B1_participant_mean", "the participant's own mean")):
+        r, q, bb = m[(reg, "full_69")], d[(reg, "full_69")], b[(reg, base_key)]
+        out.append(f"| {label} | {paper} | **{float(r['rmse_mean']):.2f}** ± {float(r['rmse_sd']):.2f} | {base_label}: {float(bb['rmse_mean']):.2f} ± {float(bb['rmse_sd']):.2f} | "
+                   f"{-float(q['delta_rmse_mean']):+.2f} [{-float(q['delta_rmse_ci_hi']):+.2f}, {-float(q['delta_rmse_ci_lo']):+.2f}]; worse in {int(q['n_participants']) - int(q['participants_model_better'])} of {q['n_participants']} |")
+    for reg, label, paper in (("R1_window_kfold", "Excursion class, balanced accuracy — random windows (paper's)", "84.3 ± 1.3 %"),
+                              ("R2_participant_grouped", "Excursion class — participant-grouped", "—"), ("R3_time_blocked", "Excursion class — time-blocked", "—")):
+        r = c[reg]
+        out.append(f"| {label} | {paper} | **{float(r['balanced_accuracy_mean']):.1f} %** | chance: 33.3 % | — |")
+    return "\n".join(out)
+
+
+def ablation_table() -> str:
+    s = {(r["regime"], r["config"]): r for r in _rows("models_summary.csv")}
+    out = ["| Features | Leave one person out | First half → second half | Time-blocked |", "|---|---|---|---|"]
+    for cfg in ("full_69", "minus_food", "minus_user_model", "minus_e4", "e4_only", "food_only"):
+        out.append(f"| {CONFIG_LABEL[cfg]} | " + " | ".join(f"{float(s[(reg, cfg)]['rmse_mean']):.2f}" for reg in ("R1_lopo", "R1_halves", "R3_blocked")) + " |")
+    b = {(r["regime"], r["baseline"]): r for r in _rows("baselines_summary.csv")}
+    out.append("| *Baseline: HbA1c + sex (across) / own mean (within)* | " + " | ".join(
+        f"*{float(b[(reg, k)]['rmse_mean']):.2f}*" for reg, k in (("R1_lopo", "B2_hba1c_sex_linear"), ("R1_halves", "B1_participant_mean"), ("R3_blocked", "B1_participant_mean"))) + " |")
+    return "\n".join(out)

@@ -47,7 +47,7 @@ def test_verdicts_follow_from_the_numbers():
     assert pred[("P2", "a")]["verdict"] == ("held" if min(abs(b0 - 21.22), abs(b2 - 21.22)) <= 3 else "failed")
     acc = float(summ[("R1_halves", "B1_participant_mean")]["accuracy_mean"])
     assert pred[("P4", "")]["verdict"] == ("held" if acc > 84 else "failed")
-    assert pred[("P3", "")]["verdict"] == "pending"          # P1b, P2b, P5 are judged by the models (tests/test_results_models.py)
+    # P1b, P2b and P5 are judged by the models (tests/test_results_models.py), P3 by the classification (tests/test_results_classification.py)
 
 
 def test_b3_is_compared_with_b1_on_identical_rows():
@@ -72,9 +72,10 @@ def test_labels_tables_are_consistent():
     assert {d["label"]: int(d["n"]) for d in dist} == {k: sum(int(r[k]) for r in lab) for k in ("PersLow", "PersNorm", "PersHigh")}
 
 
-def test_readme_tables_are_the_generated_ones():
-    text = (ROOT / "README.md").read_text()
-    for table in (baseline_summary_table(), baseline_participant_table(), verdict_table()):
-        assert table in text, "README table differs from the one generated from results/*.csv"
+def test_baseline_tables_are_the_generated_ones():
+    text = (ROOT / "docs" / "baselines.md").read_text()
+    for table in (baseline_summary_table(), baseline_participant_table()):
+        assert table in text, "docs/baselines.md table differs from the one generated from results/*.csv"
+    assert verdict_table() in (ROOT / "README.md").read_text()
     for quoted in ("20.99 ± 4.17", "86.97 %", "21.47 ± 3.94", "N = 10,230", "8,081 of the 28,964"):
         assert quoted in text

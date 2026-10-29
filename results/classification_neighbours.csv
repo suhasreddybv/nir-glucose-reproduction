@@ -1,0 +1,4 @@
+regime,test_windows,median_gap_min,no_same_participant_training_window,share_within_5min,share_within_15min,share_within_60min,share_within_24h
+R1_window_kfold,30690,5.0,0,0.6668,0.8868,0.9953,1.0
+R2_participant_grouped,30690,,30690,0.0,0.0,0.0,0.0
+R3_time_blocked,1732,4029.9,0,0.0,0.0,0.0,0.0

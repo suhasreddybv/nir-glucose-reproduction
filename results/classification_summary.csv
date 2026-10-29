@@ -1,0 +1,6 @@
+regime,unit,folds,n_test_total,balanced_accuracy_mean,balanced_accuracy_sd,balanced_accuracy_ci_lo,balanced_accuracy_ci_hi,precision_weighted_mean,precision_weighted_sd,recall_weighted_mean,recall_weighted_sd,f1_weighted_mean,f1_weighted_sd,r2_mean,r2_sd,recall_PersLow,ppv_adjusted_PersLow,recall_PersNorm,ppv_adjusted_PersNorm,recall_PersHigh,ppv_adjusted_PersHigh,paper_balanced_accuracy
+R1_window_kfold,fold,30,30690,78.18,1.12,77.77,78.57,78.07,1.15,78.18,1.12,78.07,1.14,0.545,0.034,82.54,47.58,68.89,93.14,83.1,51.97,84.3
+R1_70_30_tree,split,1,3069,73.44,0.0,,,73.17,0.0,73.44,0.0,73.23,0.0,0.448,0.0,77.91,41.54,61.0,91.12,81.43,44.95,82.0
+R1_70_30_logistic,split,1,3069,55.39,0.0,,,55.3,0.0,55.39,0.0,55.21,0.0,0.0,0.0,62.95,24.58,46.63,84.54,56.6,32.02,52.0
+R2_participant_grouped,fold,30,30690,40.15,4.97,38.45,41.94,42.21,5.35,40.12,5.44,39.3,5.85,0.0,0.0,29.97,17.07,56.6,75.28,34.11,22.42,
+R3_time_blocked,split,1,1732,47.1,0.0,,,49.34,0.0,47.23,0.0,47.11,0.0,0.0,0.0,37.68,23.32,59.04,77.25,44.57,28.1,

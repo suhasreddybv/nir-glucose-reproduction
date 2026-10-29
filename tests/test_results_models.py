@@ -56,7 +56,7 @@ def test_verdicts_follow_from_the_numbers():
         food = float(s[(reg, "minus_food")]["rmse_mean"]) - float(s[(reg, "full_69")]["rmse_mean"])
         e4 = float(s[(reg, "minus_e4")]["rmse_mean"]) - float(s[(reg, "full_69")]["rmse_mean"])
         assert (("food costs more " + word) if food > e4 else ("E4 costs more " + word)) in pred[("P5", "")]["verdict"]
-    assert pred[("P3", "")]["verdict"] == "pending"
+    # P3 is judged by the classification: tests/test_results_classification.py
     assert all(pred[k]["verdict"] == "held" for k in (("P1", "a"), ("P2", "a"), ("P4", "")))
 
 
@@ -70,10 +70,10 @@ def test_top_15_features_overlap_the_papers_table_3():
     assert len({r["feature"] for r in rows[:15]} & paper) == 14
 
 
-def test_readme_tables_are_the_generated_ones():
-    text = (ROOT / "README.md").read_text()
-    for table in (model_summary_table(), model_participant_table(), top_features_table(), verdict_table()):
-        assert table in text, "README table differs from the one generated from results/*.csv"
-    assert text.count(verdict_table()) == 1
-    for quoted in ("21.29 ± 4.00", "+0.19 mg/dL [−0.63, +1.12]", "1.36 mg/dL [−3.34, +0.46]", "14 of the paper's top 15"):
+def test_model_tables_are_the_generated_ones():
+    text = (ROOT / "docs" / "models.md").read_text()
+    for table in (model_summary_table(), model_participant_table(), top_features_table()):
+        assert table in text, "docs/models.md table differs from the one generated from results/*.csv"
+    assert (ROOT / "README.md").read_text().count(verdict_table()) == 1
+    for quoted in ("21.29 ± 4.00", "+0.19 mg/dL [−0.63, +1.12]", "1.36 mg/dL [−3.34, +0.46]", "14 of the paper's 15 most important features"):
         assert quoted in text

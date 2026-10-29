@@ -1,0 +1,5 @@
+regime,naive,n_participants,naive_rmse_mean,model_rmse_mean,naive_minus_model,ci_lo,ci_hi,participants_model_better,model_outperforms
+R1_lopo,population_mean,16,22.467,21.285,1.182,0.164,2.128,12,True
+R1_lopo,population_median,16,22.502,21.285,1.217,0.091,2.231,11,True
+R1_halves,participant_mean,16,20.99,22.35,-1.36,-3.342,0.464,9,False
+R1_halves,participant_median,16,21.507,22.35,-0.843,-2.722,0.998,10,False
