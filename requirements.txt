@@ -6,3 +6,4 @@ matplotlib>=3.9
 scikit-learn>=1.5
 pytest>=8
 xgboost>=2.0
+pre-commit>=3.7

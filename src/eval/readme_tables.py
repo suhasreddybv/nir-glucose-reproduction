@@ -15,7 +15,7 @@ def _rows(name):
 
 def baseline_summary_table() -> str:
     s = {(r["regime"], r["baseline"]): r for r in _rows("baselines_summary.csv")}
-    names = {"B0_population_mean": "B0 population mean", "B1_participant_mean": "B1 per-participant mean (training half)",
+    names = {"B0_population_mean": "B0 population mean", "B1_participant_mean": "B1 per-participant mean (own training portion)",
              "B2_hba1c_sex_linear": "B2 linear on HbA1c + sex", "B3_e4_linear": "B3 per-participant linear on the 45 E4 features",
              "B1_on_B3_rows": "B1 on B3's rows"}
     regimes = [("R1_lopo", "Paper's population regime: leave-one-person-out", "21.22 ± 4.14 (XGBoost, LOPO)"),
@@ -62,14 +62,14 @@ if __name__ == "__main__":
 REGIME_LABEL = {"R1_lopo": "LOPO (paper's population regime)", "R1_halves": "first half → second half (paper's personalised regime)",
                 "R3_blocked": "time-blocked, 24-h exclusion zones"}
 CONFIG_LABEL = {"full_69": "full model, 69 features", "minus_food": "minus the food log (50)", "minus_user_model": "minus sex, HbA1c, ID (66)",
-                "minus_e4": "minus all E4 features (24)", "e4_only": "E4 features + clock only (47)", "food_only": "food log + clock only (21)"}
+                "minus_e4": "minus all E4 (wrist) features (24)", "e4_only": "E4 (wrist) features + clock only (47)", "food_only": "food log + clock only (21)"}
 
 
 def model_summary_table() -> str:
     s = {(r["regime"], r["config"]): r for r in _rows("models_summary.csv")}
     d = {(r["regime"], r["config"]): r for r in _rows("paired_deltas.csv")}
     paper = {"R1_lopo": "21.22 ± 4.14", "R1_halves": "21.10 ± 4.50", "R3_blocked": "—"}
-    out = ["| Regime | Model | Participants | Rows | RMSE mean ± SD [95 % CI] | MAPE | \"Accuracy\" | Features kept (mean) | Baseline − model RMSE, mean [95 % CI] | Participants where the model is better | Paper |",
+    out = ["| Regime | Model | Participants | Rows | RMSE mean ± SD [95 % CI] | MAPE | \"Accuracy\" | Features kept (mean) | Baseline − model RMSE, mean [95 % CI]; positive = model better | Participants where the model is better | Paper |",
            "|---|---|---|---|---|---|---|---|---|---|---|"]
     for reg in ("R1_lopo", "R1_halves", "R3_blocked"):
         for cfg in ("full_69", "minus_food", "minus_user_model", "minus_e4", "e4_only", "food_only"):
@@ -86,7 +86,7 @@ def model_summary_table() -> str:
 
 def model_participant_table() -> str:
     d = {(r["regime"], r["config"], r["participant"]): r for r in _rows("paired_deltas_per_participant.csv")}
-    out = ["| Participant | LOPO n | B2 RMSE | XGBoost RMSE | Δ | Second-half n | B1 RMSE | personalised XGBoost RMSE | Δ | Time-blocked n | B1 RMSE | XGBoost RMSE | Δ |",
+    out = ["| Participant | LOPO n | B2 RMSE | XGBoost RMSE | B2 − model | Second-half n | B1 RMSE | personalised XGBoost RMSE | B1 − model | Time-blocked n | B1 RMSE | XGBoost RMSE | B1 − model |",
            "|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
     pids = sorted({k[2] for k in d})
     for pid in pids:
@@ -153,18 +153,19 @@ def front_page_table() -> str:
     b = {(r["regime"], r["baseline"]): r for r in _rows("baselines_summary.csv")}
     d = {(r["regime"], r["config"]): r for r in _rows("paired_deltas.csv")}
     c = {r["regime"]: r for r in _rows("classification_summary.csv")}
-    out = ["| Task and regime | Paper | This reproduction | The baseline it has to beat | Model − baseline (paired, 95 % CI) |", "|---|---|---|---|---|"]
+    out = ["| Task and regime | Paper | This reproduction | The baseline it has to beat | Baseline − model, paired mean [95 % CI]; positive = model better | Participants where the model is better |", "|---|---|---|---|---|---|"]
     for reg, label, paper, base_key, base_label in (
-            ("R1_lopo", "Glucose, RMSE mg/dL — leave one person out (paper's)", "21.22 ± 4.14", "B2_hba1c_sex_linear", "linear on HbA1c + sex"),
-            ("R1_halves", "Glucose, RMSE — first half → second half (paper's)", "21.10 ± 4.50", "B1_participant_mean", "the participant's first-half mean"),
-            ("R3_blocked", "Glucose, RMSE — time-blocked, 24-h zones", "—", "B1_participant_mean", "the participant's own mean")):
+            ("R1_lopo", "Glucose, RMSE mg/dL — leave one person out (paper's)", "21.22 ± 4.14", "B2_hba1c_sex_linear", "B2, linear on HbA1c + sex"),
+            ("R1_halves", "Glucose, RMSE — first half → second half (paper's)", "21.10 ± 4.50", "B1_participant_mean", "B1, the participant's first-half mean"),
+            ("R3_blocked", "Glucose, RMSE — time-blocked, 24-h exclusion zones", "—", "B1_participant_mean", "B1, the participant's own training mean")):
         r, q, bb = m[(reg, "full_69")], d[(reg, "full_69")], b[(reg, base_key)]
         out.append(f"| {label} | {paper} | **{float(r['rmse_mean']):.2f}** ± {float(r['rmse_sd']):.2f} | {base_label}: {float(bb['rmse_mean']):.2f} ± {float(bb['rmse_sd']):.2f} | "
-                   f"{-float(q['delta_rmse_mean']):+.2f} [{-float(q['delta_rmse_ci_hi']):+.2f}, {-float(q['delta_rmse_ci_lo']):+.2f}]; worse in {int(q['n_participants']) - int(q['participants_model_better'])} of {q['n_participants']} |")
+                   f"{float(q['delta_rmse_mean']):+.2f} [{float(q['delta_rmse_ci_lo']):+.2f}, {float(q['delta_rmse_ci_hi']):+.2f}] | {q['participants_model_better']} of {q['n_participants']} |")
     for reg, label, paper in (("R1_window_kfold", "Excursion class, balanced accuracy — random windows (paper's)", "84.3 ± 1.3 %"),
-                              ("R2_participant_grouped", "Excursion class — participant-grouped", "—"), ("R3_time_blocked", "Excursion class — time-blocked", "—")):
+                              ("R2_participant_grouped", "Excursion class — participant-grouped 10-fold × 3", "—"), ("R3_time_blocked", "Excursion class — time-blocked, 24-h exclusion zones", "—")):
         r = c[reg]
-        out.append(f"| {label} | {paper} | **{float(r['balanced_accuracy_mean']):.1f} %** | chance: 33.3 % | — |")
+        sd = f" ± {float(r['balanced_accuracy_sd']):.1f}" if int(r["folds"]) > 1 else " (one split)"
+        out.append(f"| {label} | {paper} | **{float(r['balanced_accuracy_mean']):.1f} %**{sd} | chance: 33.3 % | — | — |")
     return "\n".join(out)
 
 

@@ -17,7 +17,7 @@ import matplotlib.pyplot as plt
 
 ROOT = Path(__file__).resolve().parents[1]
 SURFACE, INK, INK2, GRID = "#fcfcfb", "#0b0b0b", "#52514e", "#e4e3df"
-MODEL, BASE, REF = "#2a78d6", "#8d8c87", "#eb6834"      # categorical slot 1, a neutral, slot 2
+MODEL, BASE, REF, LOGIT = "#2a78d6", "#8d8c87", "#eb6834", "#1baf7a"   # categorical slots 1, 2, 3 and a neutral
 
 
 def _rows(name):
@@ -31,15 +31,16 @@ def main() -> None:
     c = {r["regime"]: r for r in _rows("classification_summary.csv")}
     plt.rcParams.update({"font.size": 9, "axes.edgecolor": INK2, "axes.labelcolor": INK, "xtick.color": INK2, "ytick.color": INK2,
                          "text.color": INK, "font.family": "DejaVu Sans"})
-    fig = plt.figure(figsize=(11, 7.6), facecolor=SURFACE)
-    gs = fig.add_gridspec(2, 3, height_ratios=[1.35, 1], hspace=0.62, wspace=0.12)
+    fig = plt.figure(figsize=(11, 8.0), facecolor=SURFACE)
+    gs = fig.add_gridspec(2, 3, height_ratios=[1.35, 1], hspace=0.62, wspace=0.12, top=0.885)
     regimes = [("R1_lopo", "Leave one person out\n(paper's population regime)", "B2_hba1c_sex_linear", "B2 HbA1c + sex", 21.22),
                ("R1_halves", "First half → second half\n(paper's personalised regime)", "B1_participant_mean", "B1 own first-half mean", 21.10),
                ("R3_blocked", "Time-blocked, 24-h exclusion\n(15 participants)", "B1_participant_mean", "B1 own mean", None)]
     methods = [("base", "B0_population_mean", "B0 population mean"), ("base", "B2_hba1c_sex_linear", "B2 HbA1c + sex"),
                ("base", "B1_participant_mean", "B1 own mean"), ("base", "B3_e4_linear", "B3 wrist linear (own)*"),
-               ("model", "full_69", "XGBoost, 69 features"), ("model", "minus_food", "− food log"), ("model", "minus_e4", "− wrist"),
-               ("model", "e4_only", "wrist + clock only"), ("model", "food_only", "food + clock only")]
+               ("model", "full_69", "XGBoost, 69 features"), ("model", "minus_food", "− food log"),
+               ("model", "minus_user_model", "− sex, HbA1c, ID"), ("model", "minus_e4", "− all wrist (E4)"),
+               ("model", "e4_only", "wrist (E4) + clock only"), ("model", "food_only", "food log + clock only")]
     ax0 = None
     for k, (reg, title, ref_key, ref_label, paper) in enumerate(regimes):
         ax = fig.add_subplot(gs[0, k], sharey=ax0); ax0 = ax0 or ax
@@ -48,6 +49,7 @@ def main() -> None:
         for i, (kind, key, label) in enumerate(methods):
             r = (b if kind == "base" else m).get((reg, key))
             if r is None:
+                ax.text(17.0, len(methods) - 1 - i, "n/a", color=INK2, fontsize=8, va="center")
                 continue
             y = len(methods) - 1 - i; ys.append((y, label))
             mean, lo, hi = float(r["rmse_mean"]), float(r["rmse_ci_lo"]), float(r["rmse_ci_hi"])
@@ -72,9 +74,9 @@ def main() -> None:
         else:
             plt.setp(ax.get_yticklabels(), visible=False)
         ax.set_xlabel("RMSE, mg/dL (mean over participants, 95 % CI)", fontsize=8.5, color=INK2)
-    fig.text(0.125, 0.965, "Regression: the paper's numbers reproduce, and a constant per participant reaches them", fontsize=11.5, color=INK, weight="bold")
-    fig.text(0.125, 0.94, "Blue: the paper's XGBoost and its ablations. Grey: baselines. Dashed: the regime's reference baseline. "
-             "*B3 on its own rows; paired comparisons in docs/baselines.md.", fontsize=8.5, color=INK2)
+    fig.text(0.125, 1.0, "Regression: the population number reproduces, and a per-participant constant matches both", fontsize=11.5, color=INK, weight="bold", va="top")
+    fig.text(0.125, 0.967, "Blue: the paper's XGBoost and its ablations. Grey: baselines. Dashed: the regime's reference baseline. Diamond: the paper.\n"
+             "B1 and B3 need the participant's own training data, so they do not exist under leave one person out. *B3 is scored on the rows where all 45 wrist features are present.", fontsize=8.5, color=INK2, va="top", linespacing=1.5)
     # classification
     ax = fig.add_subplot(gs[1, :]); ax.set_facecolor(SURFACE)
     bars = [("R1_window_kfold", "Paper's split:\nwindows, 10-fold × 3", 84.3), ("R1_70_30_tree", "Paper's 70/30\nwindow split", 82.0),
@@ -82,7 +84,7 @@ def main() -> None:
             ("R3_time_blocked", "Time-blocked within\nparticipant, 24-h zones", None)]
     for i, (key, label, paper) in enumerate(bars):
         r = c[key]; v = float(r["balanced_accuracy_mean"])
-        col = MODEL if key != "R1_70_30_logistic" else BASE
+        col = MODEL if key != "R1_70_30_logistic" else LOGIT
         ax.bar(i, v, width=0.56, color=col, zorder=2)
         if r["balanced_accuracy_ci_lo"] not in ("", None):
             ax.plot([i, i], [float(r["balanced_accuracy_ci_lo"]), float(r["balanced_accuracy_ci_hi"])], color=INK, lw=1.5, zorder=3)
@@ -93,13 +95,15 @@ def main() -> None:
     ax.plot([-0.5, len(bars) - 0.45], [100 / 3, 100 / 3], color=REF, lw=2, ls=(0, (4, 3)), zorder=1)
     ax.set_xlim(-0.5, len(bars) + 0.15)
     ax.text(len(bars) - 0.4, 100 / 3, "chance\n33.3 %", ha="left", va="center", fontsize=8, color=INK2)
+    ax.text(-0.45, 96, "Blue: the paper's decision tree; green: its logistic-regression comparator. Error bars: 95 % CI over the 30 folds (single splits have none).",
+            fontsize=8, color=INK2, va="top")
     ax.set_xticks(range(len(bars))); ax.set_xticklabels([l for _, l, _ in bars], fontsize=8.5)
     ax.set_ylim(0, 100); ax.set_ylabel("Balanced accuracy, %", fontsize=8.5, color=INK2)
     ax.grid(axis="y", color=GRID, lw=0.8); ax.set_axisbelow(True)
     for s in ("top", "right"):
         ax.spines[s].set_visible(False)
     ax.tick_params(axis="x", length=0)
-    ax.set_title("Classification (PersLow / PersNorm / PersHigh, class-balanced set N = 10,230): the result lives in the split",
+    ax.set_title("Classification of excursion classes (PersLow / PersNorm / PersHigh): the result lives in the split",
                  fontsize=11.5, color=INK, loc="left", weight="bold", pad=10)
     (ROOT / "figures").mkdir(exist_ok=True)
     fig.savefig(ROOT / "figures" / "hero.png", dpi=170, facecolor=SURFACE, bbox_inches="tight")
